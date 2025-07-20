@@ -1,0 +1,25 @@
+# Core ML and Data Science packages
+numpy==1.26.4
+pandas==2.2.2
+scikit-learn==1.5.1
+matplotlib==3.9.2
+seaborn==0.13.2
+plotly==6.2.0
+
+# Web framework
+streamlit==1.37.1
+
+# ML experiment tracking
+mlflow==3.1.1
+
+# Utilities
+requests==2.32.3
+joblib==1.4.2
+
+# Excel file support
+xlrd==2.0.1
+openpyxl==3.1.5
+
+# Optional packages (commented out by default)
+# shap==0.42.0
+# kaggle==1.5.16

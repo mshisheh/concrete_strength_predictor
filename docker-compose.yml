@@ -1,0 +1,69 @@
+services:
+  concrete-predictor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: concrete-predictor-app
+    ports:
+      - "8501:8501"
+    volumes:
+      # Mount data directory (read-only for security)
+      - ./data:/app/data:ro
+      # Mount models directory for persistence
+      - ./models:/app/models
+      # Mount MLflow runs for experiment tracking
+      - ./mlruns:/app/mlruns
+    environment:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+      - STREAMLIT_SERVER_HEADLESS=true
+      - STREAMLIT_SERVER_FILE_WATCHER_TYPE=none
+      - PYTHONPATH=/app
+    networks:
+      - concrete-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Optional: MLflow tracking server
+  mlflow-server:
+    image: python:3.12-slim
+    container_name: concrete-mlflow-server
+    command: >
+      bash -c "pip install mlflow==3.1.1 &&
+               mlflow server 
+               --backend-store-uri file:///mlruns 
+               --default-artifact-root file:///mlruns 
+               --host 0.0.0.0 
+               --port 5000"
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./mlruns:/mlruns
+    environment:
+      - ENVIRONMENT=production
+    networks:
+      - concrete-net
+    restart: unless-stopped
+    profiles:
+      - mlflow  # Only start with: docker-compose --profile mlflow up
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+networks:
+  concrete-net:
+    driver: bridge
+
+volumes:
+  mlflow_data:
+    driver: local

@@ -1,0 +1,66 @@
+# Google Cloud Run deployment configuration
+apiVersion: v1
+kind: Service
+metadata:
+  name: concrete-strength-predictor
+  annotations:
+    run.googleapis.com/ingress: all
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/maxScale: "10"
+        run.googleapis.com/cpu-throttling: "false"
+        run.googleapis.com/memory: "2Gi"
+        run.googleapis.com/cpu: "1000m"
+    spec:
+      containerConcurrency: 80
+      timeoutSeconds: 300
+      containers:
+      - image: gcr.io/YOUR_PROJECT_ID/concrete-strength-predictor:latest
+        ports:
+        - containerPort: 8501
+        env:
+        - name: ENVIRONMENT
+          value: production
+        - name: LOG_LEVEL
+          value: INFO
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 2Gi
+          requests:
+            cpu: 500m
+            memory: 1Gi
+        livenessProbe:
+          httpGet:
+            path: /_stcore/health
+            port: 8501
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /_stcore/health
+            port: 8501
+          initialDelaySeconds: 10
+          periodSeconds: 10
+  traffic:
+  - percent: 100
+    latestRevision: true
+
+---
+# Deploy script for Google Cloud Run
+# Usage: 
+# 1. Update YOUR_PROJECT_ID above
+# 2. Run: gcloud run services replace cloud-run.yml
+# 3. Or use the deploy script below
+
+# gcloud run deploy concrete-strength-predictor \
+#   --image gcr.io/YOUR_PROJECT_ID/concrete-strength-predictor:latest \
+#   --platform managed \
+#   --region us-central1 \
+#   --allow-unauthenticated \
+#   --memory 2Gi \
+#   --cpu 1 \
+#   --max-instances 10 \
+#   --port 8501

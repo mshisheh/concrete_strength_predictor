@@ -1,0 +1,224 @@
+# Concrete Strength Predictor - Command History
+# Date: July 19, 2025
+# This file contains all commands used to set up the project
+
+## Project Setup Commands
+
+### 1. Initial Project Structure Creation
+# Created the following project structure:
+# concrete-strength-predictor/
+# ├── concrete/
+# │   ├── __init__.py
+# │   ├── data_loader.py
+# │   ├── trainer.py
+# │   ├── evaluator.py
+# │   ├── visualizer.py
+# │   └── app.py
+# ├── tests/
+# │   ├── __init__.py
+# │   ├── test_data_loader.py
+# │   ├── test_trainer.py
+# │   ├── test_evaluator.py
+# │   └── test_visualizer.py
+# ├── data/
+# │   └── concrete_data.csv
+# ├── models/
+# ├── notebooks/
+# ├── docs/
+# ├── .venv/
+# ├── pyproject.toml
+# ├── README.md
+# ├── .gitignore
+# └── .github.copilot.instructions.md
+
+### 2. Poetry Installation and Configuration
+# Install Poetry using PowerShell
+curl -sSL https://install.python-poetry.org | python -
+
+# Configure Poetry to use shorter virtual environment paths (Windows path length fix)
+python -m poetry config virtualenvs.path "C:\\venvs"
+python -m poetry config virtualenvs.in-project false
+
+# Verify Poetry configuration
+python -m poetry config virtualenvs.path
+python -m poetry config virtualenvs.in-project
+
+### 3. Python Environment Setup
+# Install project dependencies using Poetry
+python -m poetry install
+
+# Note: SHAP package was initially included but removed due to Windows compilation issues
+# The following error occurred with SHAP:
+# - Microsoft Visual C++ 14.0 or greater is required
+# - CUDA compilation errors (nvcc fatal: Value 'sm_37' is not defined)
+
+### 4. Project Dependencies (from pyproject.toml)
+# Main dependencies installed:
+# - python = ">=3.9,<3.9.7 || >3.9.7,<4.0"
+# - streamlit = "^1.28.0"
+# - plotly = "^5.17.0"
+# - mlflow = "^2.8.0"
+# - scikit-learn = "^1.3.0"
+# - matplotlib = "^3.7.0"
+# - seaborn = "^0.12.0"
+# - pandas = "^2.1.0"
+# - numpy = "^1.24.0"
+# - requests = "^2.31.0"
+# - joblib = "^1.3.0"
+
+# Development dependencies:
+# - pytest = "^7.4.0"
+# - pytest-cov = "^4.1.0"
+# - black = "^23.7.0"
+# - isort = "^5.12.0"
+# - flake8 = "^6.0.0"
+# - mypy = "^1.5.0"
+# - pre-commit = "^3.4.0"
+
+### 5. VS Code Task Configuration
+# Created VS Code task in .vscode/tasks.json:
+# Task: "Run Streamlit App"
+# Command: python -m poetry run streamlit run concrete/app.py
+# Type: shell
+# Group: build
+# Background: true
+
+### 6. Running the Application
+# To run the Streamlit app:
+python -m poetry run streamlit run concrete/app.py
+
+# Alternative using Poetry shell:
+poetry shell
+streamlit run concrete/app.py
+
+### 7. Development Workflow Commands
+# Run tests:
+python -m poetry run pytest
+
+# Run tests with coverage:
+python -m poetry run pytest --cov=concrete
+
+# Format code with Black:
+python -m poetry run black .
+
+# Sort imports with isort:
+python -m poetry run isort .
+
+# Lint code with flake8:
+python -m poetry run flake8 .
+
+# Type checking with mypy:
+python -m poetry run mypy concrete/
+
+# Run pre-commit hooks:
+python -m poetry run pre-commit run --all-files
+
+### 8. MLflow Commands
+# Start MLflow UI:
+python -m poetry run mlflow ui
+
+# Start MLflow server with specific host and port:
+python -m poetry run mlflow server --host 0.0.0.0 --port 5000
+
+### 9. Data Processing Commands
+# Train model:
+python -m poetry run python concrete/trainer.py
+
+# Run prediction:
+python -m poetry run python concrete/app.py
+
+### 10. Poetry Environment Management
+# Show virtual environment info:
+python -m poetry env info
+
+# Show installed packages:
+python -m poetry show
+
+# Add new dependency:
+python -m poetry add <package_name>
+
+# Add development dependency:
+python -m poetry add --group dev <package_name>
+
+# Remove dependency:
+python -m poetry remove <package_name>
+
+# Update dependencies:
+python -m poetry update
+
+# Export requirements.txt (if needed):
+python -m poetry export -f requirements.txt --output requirements.txt
+
+### 11. Git Commands (if using version control)
+# Initialize git repository:
+git init
+
+# Add all files:
+git add .
+
+# Initial commit:
+git commit -m "Initial project setup with Poetry and Streamlit"
+
+# Add remote repository:
+git remote add origin <repository_url>
+
+# Push to remote:
+git push -u origin main
+
+### 12. Docker Commands (for deployment)
+# Build Docker image:
+docker build -t concrete-strength-predictor .
+
+# Run Docker container:
+docker run -p 8501:8501 concrete-strength-predictor
+
+### 13. Project Structure Validation
+# Check project structure:
+tree /f
+
+# Verify Python modules can be imported:
+python -c "import concrete; print('Import successful')"
+
+### 14. Troubleshooting Commands
+# Clear Poetry cache:
+python -m poetry cache clear pypi --all
+
+# Rebuild virtual environment:
+python -m poetry env remove python
+python -m poetry install
+
+# Check Poetry configuration:
+python -m poetry config --list
+
+# Debug dependency resolution:
+python -m poetry lock --verbose
+
+## Notes and Issues Encountered
+
+### SHAP Installation Issue:
+- SHAP package failed to install on Windows due to compilation requirements
+- Error: Microsoft Visual C++ 14.0 or greater is required
+- CUDA compilation errors with nvcc
+- Solution: Removed SHAP from dependencies for now
+- Alternative: Install Visual Studio Build Tools or use pre-compiled wheels
+
+### Poetry Path Length Issue:
+- Initial installation failed due to Windows path length limitations
+- Solution: Configured shorter virtual environment paths
+- Used: poetry config virtualenvs.path "C:\\venvs"
+
+### Python Version Constraints:
+- Specified Python version constraints to avoid compatibility issues
+- Used: ">=3.9,<3.9.7 || >3.9.7,<4.0" to exclude problematic Python 3.9.7
+
+## Success Metrics:
+✅ Poetry successfully installed and configured
+✅ Virtual environment created with shorter paths
+✅ All main dependencies installed successfully
+✅ VS Code task created for running Streamlit app
+✅ Project structure follows ML best practices
+✅ Development tools configured (pytest, black, flake8, mypy)
+✅ MLflow integration ready for experiment tracking
+
+## Final Status:
+Project is ready for development. All core dependencies are installed and the development environment is properly configured using Poetry as the package manager.
