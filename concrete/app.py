@@ -346,6 +346,7 @@ def show_model_training_page():
         'Elastic Net': 'elastic_net',
         'Random Forest': 'random_forest',
         'Gradient Boosting': 'gradient_boosting',
+        'XGBoost': 'xgboost',
         'Support Vector Regression': 'svr',
         'Neural Network': 'mlp'
     }
@@ -353,7 +354,7 @@ def show_model_training_page():
     selected_models = st.multiselect(
         "Select models to train:",
         options=list(available_models.keys()),
-        default=['Linear Regression', 'Ridge Regression', 'Random Forest'],
+        default=['Linear Regression', 'Ridge Regression', 'Random Forest', 'XGBoost'],
         help="Select one or more models to train and compare"
     )
     

@@ -18,6 +18,7 @@ from sklearn.svm import SVR
 from sklearn.neural_network import MLPRegressor
 from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
 from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
+import xgboost as xgb
 import mlflow
 import mlflow.sklearn
 from mlflow.models.signature import infer_signature
@@ -95,6 +96,16 @@ class ConcreteTrainer:
                     'learning_rate': [0.01, 0.1, 0.2],
                     'max_depth': [3, 5, 7],
                     'subsample': [0.8, 0.9, 1.0]
+                }
+            },
+            'xgboost': {
+                'model': xgb.XGBRegressor(random_state=42, n_jobs=-1),
+                'params': {
+                    'n_estimators': [50, 100, 200],
+                    'learning_rate': [0.01, 0.1, 0.2],
+                    'max_depth': [3, 5, 7],
+                    'subsample': [0.8, 0.9, 1.0],
+                    'colsample_bytree': [0.8, 0.9, 1.0]
                 }
             },
             'svr': {
