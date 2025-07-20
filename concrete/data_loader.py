@@ -178,8 +178,16 @@ class ConcreteDataLoader:
                 logger.info(f"Removed {outliers_removed} outliers from {column}")
         
         # Ensure positive values for physical quantities
-        physical_columns = [col for col in df_clean.columns if col != 'compressive_strength']
-        for col in physical_columns:
+        # In concrete manufacturing, cement, water, and age must be > 0
+        essential_columns = ['cement', 'water', 'age']
+        for col in essential_columns:
+            if col in df_clean.columns:
+                df_clean = df_clean[df_clean[col] > 0]
+        
+        # Other ingredients can be >= 0 (they can be absent)
+        other_physical_columns = [col for col in df_clean.columns 
+                                if col not in essential_columns + ['compressive_strength']]
+        for col in other_physical_columns:
             df_clean = df_clean[df_clean[col] >= 0]
         
         # Ensure positive strength values

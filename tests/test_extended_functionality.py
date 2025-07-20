@@ -37,14 +37,22 @@ class TestDataSourceManager(unittest.TestCase):
         self.assertEqual(self.manager.data_dir, Path(self.test_dir))
         self.assertTrue(self.manager.data_dir.exists())
     
-    @patch('concrete.data_sources.kaggle')
-    def test_download_from_kaggle_success(self, mock_kaggle):
+    @patch('builtins.__import__')
+    def test_download_from_kaggle_success(self, mock_import):
         """Test successful Kaggle download."""
-        # Mock successful download
+        # Mock the kaggle module import
+        mock_kaggle = MagicMock()
         mock_kaggle.api.dataset_download_files.return_value = None
         
+        def side_effect(name, *args, **kwargs):
+            if name == 'kaggle':
+                return mock_kaggle
+            return __import__(name, *args, **kwargs)
+        
+        mock_import.side_effect = side_effect
+        
         # Create a mock zip file
-        zip_path = Path(self.test_dir) / "test.zip"
+        zip_path = Path(self.test_dir) / "kaggle_concrete_data.zip"
         zip_path.touch()
         
         with patch.object(self.manager, '_extract_kaggle_data') as mock_extract:
