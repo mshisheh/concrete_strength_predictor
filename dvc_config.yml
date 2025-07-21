@@ -1,0 +1,50 @@
+# DVC Configuration for Data Versioning
+# This file will be used to set up DVC for data version control
+
+# DVC (Data Version Control) Setup for Concrete Strength Project
+# This will enable data versioning alongside MLflow model versioning
+
+# 1. Data versioning structure
+data_versioning:
+  enabled: false  # Will be enabled when DVC is set up
+  remote_storage: s3  # Can be s3, gcs, azure, local, etc.
+  
+  # Data files to track
+  tracked_files:
+    - "data/Concrete_Data.xls"  # Raw data
+    - "data/concrete_processed.csv"  # Processed data
+    - "data/splits/"  # Train/val/test splits
+  
+  # Data pipeline stages
+  stages:
+    - name: "raw_data_ingestion"
+      description: "Load raw concrete data"
+      outputs: ["data/Concrete_Data.xls"]
+      
+    - name: "data_preprocessing" 
+      description: "Clean and preprocess data"
+      inputs: ["data/Concrete_Data.xls"]
+      outputs: ["data/concrete_processed.csv"]
+      
+    - name: "data_splitting"
+      description: "Split data into train/val/test"
+      inputs: ["data/concrete_processed.csv"]
+      outputs: ["data/splits/"]
+
+# Integration with MLflow
+mlflow_integration:
+  # Log data version with each model training run
+  log_data_version: true
+  
+  # Track data lineage
+  data_lineage:
+    - data_source: "UCI Concrete Dataset"
+    - preprocessing_version: "v1.0"
+    - splitting_strategy: "stratified"
+
+# Future enhancements
+future_features:
+  - data_drift_detection: true
+  - automated_retraining: true
+  - data_quality_monitoring: true
+  - feature_store_integration: true

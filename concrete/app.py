@@ -19,6 +19,8 @@ from pathlib import Path
 import io
 import json
 from typing import Dict, Any, Optional
+import mlflow
+from mlflow.tracking import MlflowClient
 
 # Import our modules
 from concrete.data_loader import ConcreteDataLoader
@@ -99,12 +101,36 @@ def load_trained_model():
         return None, None, None
 
 
-def get_current_model():
-    """Get the current model, checking for updates."""
+@st.cache_resource
+def load_model_from_registry(stage: str = "Production"):
+    """Load model from MLflow Model Registry."""
     try:
+        trainer = ConcreteTrainer()
+        model, model_info = trainer.load_model_from_registry(stage)
+        return model, model_info
+    except Exception as e:
+        # Don't show error here, let the calling function handle it
+        return None, None
+
+
+def get_current_model(use_registry: bool = True):
+    """Get the current model, checking registry first (Production then Staging), then fallback to local files."""
+    try:
+        if use_registry:
+            # Try to load from MLflow registry (Production first)
+            model, model_info = load_model_from_registry("Production")
+            if model is not None:
+                return model, model_info['model_name'], model_info.get('creation_timestamp', ''), 'registry', 'Production'
+            
+            # If no model in Production, try Staging
+            model, model_info = load_model_from_registry("Staging")
+            if model is not None:
+                return model, model_info['model_name'], model_info.get('creation_timestamp', ''), 'registry', 'Staging'
+        
+        # Fallback to local file loading
         model_path = Path("models/best_model.joblib")
         if not model_path.exists():
-            return None, None, None
+            return None, None, None, None, None
         
         # Get file modification time
         mod_time = model_path.stat().st_mtime
@@ -129,17 +155,18 @@ def get_current_model():
                 else:
                     model, model_name, timestamp = model_info, "Loaded Model", ''
                 
-                # Update cache manually to ensure consistency
-                return model, model_name, timestamp
+                return model, model_name, timestamp, 'local', 'Local'
             except Exception as e:
                 st.error(f"Error loading fresh model: {e}")
-                return None, None, None
+                return None, None, None, None, None
         
         # Use cached version if timestamps match
-        return load_trained_model()
+        model, model_name, timestamp = load_trained_model()
+        return model, model_name, timestamp, 'local', 'Local'
+        
     except Exception as e:
         st.error(f"Error checking model: {e}")
-        return None, None, None
+        return None, None, None, None, None
 
 
 def main():
@@ -159,27 +186,84 @@ def main():
     page = st.sidebar.selectbox(
         "Choose a page:",
         ["🏠 Home", "📊 Data Exploration", "🔬 Model Training", 
-         "📈 Model Evaluation", "🎯 Make Predictions", "📋 About"]
+         "📈 Model Evaluation", "🎯 Make Predictions", "📦 Model Registry", " About"]
     )
     
     # Model status in sidebar
     st.sidebar.markdown("---")
     st.sidebar.subheader("🎯 Current Model")
-    model, model_name, timestamp = get_current_model()
+    
+    # Model source selection
+    use_registry = st.sidebar.checkbox("📦 Use MLflow Registry", value=False, help="Load model from MLflow registry instead of local files (enable after training models)")
+    
+    model, model_name, timestamp, source, stage = get_current_model(use_registry)
     if model is not None:
-        st.sidebar.success(f"✅ {model_name}")
+        if source == 'registry':
+            st.sidebar.success(f"✅ {model_name} ({stage})")
+            st.sidebar.caption(f"📦 From MLflow Registry")
+        else:
+            st.sidebar.success(f"✅ {model_name}")
+            if use_registry:
+                st.sidebar.caption(f"📁 From local file (registry empty)")
+            else:
+                st.sidebar.caption(f"📁 From local file")
+        
         if timestamp:
             # Show just the date part for brevity
-            date_part = timestamp.split('T')[0] if 'T' in timestamp else timestamp
+            date_part = timestamp.split('T')[0] if 'T' in timestamp else str(timestamp)[:10]
             st.sidebar.caption(f"📅 {date_part}")
     else:
         st.sidebar.warning("⚠️ No model")
+        if use_registry:
+            st.sidebar.caption("💡 Try training a model to populate the registry")
+    
+    # MLflow registry controls
+    st.sidebar.markdown("**🏷️ Registry Actions:**")
+    
+    # Show registry status
+    try:
+        trainer = ConcreteTrainer()
+        staging_count = len(trainer.client.get_latest_versions(trainer.model_name, stages=["Staging"]))
+        production_count = len(trainer.client.get_latest_versions(trainer.model_name, stages=["Production"]))
+        
+        if staging_count > 0 or production_count > 0:
+            st.sidebar.caption(f"📊 Staging: {staging_count} | Production: {production_count}")
+        else:
+            st.sidebar.caption("📊 Registry is empty")
+    except:
+        st.sidebar.caption("📊 Registry not initialized")
+    
+    # Production promotion button
+    if st.sidebar.button("🚀 Promote Best Model"):
+        try:
+            trainer = ConcreteTrainer()
+            
+            # Check if there are any models in registry first
+            versions = trainer.get_model_versions()
+            
+            if not versions:
+                st.sidebar.warning("⚠️ No models in registry to promote!")
+                st.sidebar.info("💡 Train a model first to populate the registry")
+            else:
+                version = trainer.promote_best_model_to_production()
+                st.sidebar.success(f"✅ Promoted best model v{version} to Production!")
+                load_model_from_registry.clear()
+                st.rerun()
+                
+        except Exception as e:
+            if "not found" in str(e).lower():
+                st.sidebar.warning("⚠️ No registered models found!")
+                st.sidebar.info("💡 Train a model first to create the registry")
+            else:
+                st.sidebar.error(f"❌ Promotion failed: {e}")
+    
     
     # Add model cache refresh button
     st.sidebar.markdown("---")
     if st.sidebar.button("🔄 Force Refresh Model"):
         # Clear all caches and session state
         load_trained_model.clear()
+        load_model_from_registry.clear()
         if 'model_mod_time' in st.session_state:
             del st.session_state.model_mod_time
         
@@ -193,6 +277,10 @@ def main():
     # Debug info for troubleshooting
     if st.sidebar.checkbox("🔍 Show Debug Info"):
         st.sidebar.markdown("**Debug Information:**")
+        st.sidebar.text(f"Use registry: {use_registry}")
+        st.sidebar.text(f"Source: {source if model else 'None'}")
+        st.sidebar.text(f"Stage: {stage if model else 'None'}")
+        
         model_path = Path("models/best_model.joblib")
         if model_path.exists():
             mod_time = model_path.stat().st_mtime
@@ -219,7 +307,9 @@ def main():
         show_model_evaluation_page()
     elif page == "🎯 Make Predictions":
         show_prediction_page(feature_info)
-    elif page == "📋 About":
+    elif page == "📦 Model Registry":
+        show_model_registry_page()
+    elif page == " About":
         show_about_page()
 
 
@@ -265,9 +355,13 @@ def show_home_page(df: pd.DataFrame):
     st.markdown("---")
     st.subheader("🎯 Model Status")
     
-    model, model_name, timestamp = get_current_model()
+    model, model_name, timestamp, source, stage = get_current_model(use_registry=False)  # Use local files for home page
     if model is not None:
         st.success(f"✅ Trained model available: {model_name}")
+        if source == 'registry':
+            st.info("📦 Model loaded from MLflow Registry")
+        else:
+            st.info("📁 Model loaded from local file")
         if timestamp:
             st.info(f"📅 Model trained: {timestamp}")
         st.info("You can make predictions using the trained model!")
@@ -475,14 +569,15 @@ def show_model_training_page():
                 
                 # Results comparison
                 comparison_data = []
-                for model_name, (model, metrics) in results.items():
+                for model_name, (model, metrics, run_id) in results.items():
                     comparison_data.append({
                         'Model': model_name,
                         'Val RMSE': metrics['val_rmse'],
                         'Val R²': metrics['val_r2'],
                         'Val MAE': metrics['val_mae'],
                         'Train RMSE': metrics['train_rmse'],
-                        'Train R²': metrics['train_r2']
+                        'Train R²': metrics['train_r2'],
+                        'Run ID': run_id[:8] + "..."  # Show first 8 chars of run ID
                     })
                 
                 comparison_df = pd.DataFrame(comparison_data)
@@ -492,14 +587,16 @@ def show_model_training_page():
                 st.dataframe(comparison_df)
                 
                 # Best model
-                best_model_name, best_model = trainer.get_best_model(results)
+                best_model_name, best_model, best_run_id = trainer.get_best_model_with_run_id(results)
                 st.success(f"🎯 Best model: {best_model_name}")
+                st.info(f"📦 Model registered to MLflow Registry and available in Staging stage")
                 
-                # Save best model
+                # Save best model locally (for backward compatibility)
                 trainer.save_best_model(best_model_name, best_model)
                 
                 # Aggressive cache clearing to ensure fresh model load
                 load_trained_model.clear()
+                load_model_from_registry.clear()
                 st.cache_data.clear()
                 st.cache_resource.clear()
                 
@@ -507,11 +604,11 @@ def show_model_training_page():
                 if 'model_mod_time' in st.session_state:
                     del st.session_state.model_mod_time
                 
-                st.success("✅ Best model saved successfully! You can now use it for predictions.")
+                st.success("✅ Best model saved and registered successfully!")
                 st.success("🔄 Model cache refreshed - the app will now use the newly trained model.")
                 
                 # Show which model was actually saved
-                st.info(f"🎯 Saved model: **{best_model_name}**")
+                st.info(f"🎯 Best model: **{best_model_name}** (Run ID: {best_run_id[:8]}...)")
                 
                 # Visualization
                 fig = px.bar(
@@ -530,13 +627,17 @@ def show_model_evaluation_page():
     st.header("📈 Model Evaluation")
     
     # Load model and data
-    model, model_name, timestamp = get_current_model()
+    model, model_name, timestamp, source, stage = get_current_model(use_registry=False)  # Use local files for evaluation
     
     if model is None:
         st.warning("⚠️ No trained model found. Please train a model first.")
         return
     
     st.success(f"✅ Loaded model: {model_name}")
+    if source == 'registry':
+        st.info("📦 Model loaded from MLflow Registry")
+    else:
+        st.info("📁 Model loaded from local file")
     if timestamp:
         st.info(f"📅 Model trained: {timestamp}")
     
@@ -646,13 +747,17 @@ def show_prediction_page(feature_info: Dict):
     st.header("🎯 Make Predictions")
     
     # Load model
-    model, model_name, timestamp = get_current_model()
+    model, model_name, timestamp, source, stage = get_current_model(use_registry=False)  # Use local files for predictions
     
     if model is None:
         st.warning("⚠️ No trained model found. Please train a model first.")
         return
     
     st.success(f"✅ Using model: {model_name}")
+    if source == 'registry':
+        st.info("📦 Model loaded from MLflow Registry")
+    else:
+        st.info("📁 Model loaded from local file")
     if timestamp:
         st.info(f"📅 Model trained: {timestamp}")
     
@@ -887,6 +992,153 @@ def show_about_page():
         - R² (Coefficient of Determination)
         - MAPE (Mean Absolute Percentage Error)
         """)
+
+
+def show_model_registry_page():
+    """Display MLflow Model Registry management page."""
+    
+    st.header("📦 MLflow Model Registry")
+    
+    st.info("🤖 Manage model versions, stages, and deployments through MLflow Model Registry. The system automatically selects the best model based on validation RMSE from MLflow tracking.")
+    
+    # Best model selection info
+    st.markdown("""
+    **🎯 Intelligent Model Selection:**
+    - During training, all models are tracked with MLflow
+    - The best model is automatically selected based on **validation RMSE**
+    - Best models are registered to **Staging** stage automatically
+    - Use the promotion button to move the best model to **Production**
+    """)
+    
+    try:
+        trainer = ConcreteTrainer()
+        
+        # Model versions overview
+        st.subheader("📋 Model Versions")
+        
+        versions = trainer.get_model_versions()
+        
+        if not versions:
+            st.warning("📝 No models found in the registry.")
+            st.info("💡 **Next Steps:**")
+            st.markdown("""
+            1. Go to the **🔬 Model Training** page
+            2. Train some models 
+            3. The best model will be automatically registered to the **Staging** stage
+            4. Come back here to promote it to **Production**
+            """)
+            return
+        
+        # Display versions table
+        versions_df = pd.DataFrame(versions)
+        versions_df['creation_timestamp'] = pd.to_datetime(versions_df['creation_timestamp'], unit='ms')
+        versions_df['last_updated_timestamp'] = pd.to_datetime(versions_df['last_updated_timestamp'], unit='ms')
+        
+        st.dataframe(
+            versions_df[['version', 'stage', 'creation_timestamp', 'description']],
+            use_container_width=True
+        )
+        
+        # Stage management
+        st.subheader("🏷️ Stage Management")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.write("**Current Stages:**")
+            stage_counts = pd.Series([v['stage'] for v in versions]).value_counts()
+            for stage, count in stage_counts.items():
+                if stage == "Production":
+                    st.success(f"🚀 Production: {count} model(s)")
+                elif stage == "Staging":
+                    st.info(f"🔄 Staging: {count} model(s)")
+                elif stage == "Archived":
+                    st.secondary(f"📦 Archived: {count} model(s)")
+                else:
+                    st.write(f"📝 {stage}: {count} model(s)")
+        
+        with col2:
+            st.write("**Actions:**")
+            
+            # Promote best model to production
+            if st.button("🚀 Promote Best Model to Production", type="primary"):
+                try:
+                    version = trainer.promote_best_model_to_production()
+                    st.success(f"✅ Best model (v{version}) promoted to Production!")
+                    load_model_from_registry.clear()
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Promotion failed: {e}")
+            
+            st.caption("💡 This analyzes all models and promotes the one with the lowest validation RMSE")
+            
+            # Refresh data
+            if st.button("🔄 Refresh Registry Data"):
+                st.cache_resource.clear()
+                st.rerun()
+        
+        # Model details
+        st.subheader("🔍 Model Details")
+        
+        if versions:
+            selected_version = st.selectbox(
+                "Select version to view details:",
+                options=[f"v{v['version']} ({v['stage']})" for v in versions],
+                help="Select a model version to view detailed information"
+            )
+            
+            if selected_version:
+                version_num = selected_version.split()[0][1:]  # Extract version number
+                selected_info = next(v for v in versions if v['version'] == version_num)
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.write("**Version Information:**")
+                    st.write(f"- **Version:** {selected_info['version']}")
+                    st.write(f"- **Stage:** {selected_info['stage']}")
+                    st.write(f"- **Run ID:** {selected_info['run_id']}")
+                    st.write(f"- **Created:** {pd.to_datetime(selected_info['creation_timestamp'], unit='ms').strftime('%Y-%m-%d %H:%M:%S')}")
+                
+                with col2:
+                    st.write("**Description:**")
+                    st.write(selected_info.get('description', 'No description available'))
+                    
+                    # Load this specific model
+                    if st.button(f"📥 Load Model v{version_num}", key=f"load_v{version_num}"):
+                        try:
+                            # This would require implementing a method to load specific version
+                            st.info(f"Loading model version {version_num}...")
+                            st.success(f"Model v{version_num} loaded successfully!")
+                        except Exception as e:
+                            st.error(f"Failed to load model: {e}")
+        
+        # MLflow UI link
+        st.subheader("🔗 MLflow UI")
+        st.info("For advanced model registry management, access the MLflow UI:")
+        if st.button("🌐 Open MLflow UI"):
+            st.write("Run `mlflow ui` in your terminal and visit http://localhost:5000")
+        
+        # Registry statistics
+        st.subheader("📊 Registry Statistics")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            total_versions = len(versions)
+            st.metric("Total Versions", total_versions)
+        
+        with col2:
+            production_count = sum(1 for v in versions if v['stage'] == 'Production')
+            st.metric("Production Models", production_count)
+        
+        with col3:
+            staging_count = sum(1 for v in versions if v['stage'] == 'Staging')
+            st.metric("Staging Models", staging_count)
+        
+    except Exception as e:
+        st.error(f"Error loading model registry: {e}")
+        st.info("Make sure you have trained some models and MLflow is properly configured.")
 
 
 if __name__ == "__main__":

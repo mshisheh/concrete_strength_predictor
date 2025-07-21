@@ -21,6 +21,12 @@ joblib==1.4.2
 xlrd==2.0.1
 openpyxl==3.1.5
 
+# Data versioning (optional - for future use)
+dvc[s3]==3.55.2
+# Uncomment the following when setting up cloud storage:
+# dvc[azure]==3.55.2  # For Azure Blob Storage
+# dvc[gcs]==3.55.2     # For Google Cloud Storage
+
 # Optional packages (commented out by default)
 # shap==0.42.0
 # kaggle==1.5.16
