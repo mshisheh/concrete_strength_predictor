@@ -132,6 +132,27 @@ docker build -t concrete-strength-predictor .
 docker run -p 8501:8501 concrete-strength-predictor
 ```
 
+## 🚀 Production Deployment
+
+### Quick Start (Docker Hub)
+```bash
+# Pull and run the production-ready image
+docker pull mshisheh/concrete-strength-predictor:latest
+docker run -d -p 8501:8501 --name concrete-predictor mshisheh/concrete-strength-predictor:latest
+
+# Access the application at http://localhost:8501
+```
+
+### Production Platforms
+- **AWS**: ECS, Fargate, App Runner
+- **Google Cloud**: Cloud Run, GKE
+- **Azure**: Container Instances, App Service
+- **Kubernetes**: Any cluster
+
+📖 **Complete deployment guide**: [PRODUCTION_DEPLOYMENT_GUIDE.md](PRODUCTION_DEPLOYMENT_GUIDE.md)
+
+---
+
 ## 🧪 Testing
 
 Run the test suite:

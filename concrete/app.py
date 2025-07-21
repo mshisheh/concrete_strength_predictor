@@ -89,14 +89,57 @@ def load_trained_model():
         if model_path.exists():
             model_info = joblib.load(model_path)
             if isinstance(model_info, dict):
-                return model_info['model'], model_info['model_name']
+                return model_info['model'], model_info['model_name'], model_info.get('timestamp', '')
             else:
-                return model_info, "Loaded Model"
+                return model_info, "Loaded Model", ''
         else:
-            return None, None
+            return None, None, None
     except Exception as e:
         st.error(f"Error loading model: {e}")
-        return None, None
+        return None, None, None
+
+
+def get_current_model():
+    """Get the current model, checking for updates."""
+    try:
+        model_path = Path("models/best_model.joblib")
+        if not model_path.exists():
+            return None, None, None
+        
+        # Get file modification time
+        mod_time = model_path.stat().st_mtime
+        
+        # Always check if we need to update the cache
+        if ('model_mod_time' not in st.session_state or 
+            st.session_state.model_mod_time != mod_time):
+            
+            st.session_state.model_mod_time = mod_time
+            # Force clear all related caches
+            load_trained_model.clear()
+            
+            # Force reload by calling the function directly without cache
+            try:
+                model_info = joblib.load(model_path)
+                if isinstance(model_info, dict):
+                    model, model_name, timestamp = (
+                        model_info['model'], 
+                        model_info['model_name'], 
+                        model_info.get('timestamp', '')
+                    )
+                else:
+                    model, model_name, timestamp = model_info, "Loaded Model", ''
+                
+                # Update cache manually to ensure consistency
+                return model, model_name, timestamp
+            except Exception as e:
+                st.error(f"Error loading fresh model: {e}")
+                return None, None, None
+        
+        # Use cached version if timestamps match
+        return load_trained_model()
+    except Exception as e:
+        st.error(f"Error checking model: {e}")
+        return None, None, None
 
 
 def main():
@@ -118,6 +161,45 @@ def main():
         ["🏠 Home", "📊 Data Exploration", "🔬 Model Training", 
          "📈 Model Evaluation", "🎯 Make Predictions", "📋 About"]
     )
+    
+    # Model status in sidebar
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("🎯 Current Model")
+    model, model_name, timestamp = get_current_model()
+    if model is not None:
+        st.sidebar.success(f"✅ {model_name}")
+        if timestamp:
+            # Show just the date part for brevity
+            date_part = timestamp.split('T')[0] if 'T' in timestamp else timestamp
+            st.sidebar.caption(f"📅 {date_part}")
+    else:
+        st.sidebar.warning("⚠️ No model")
+    
+    # Add model cache refresh button
+    st.sidebar.markdown("---")
+    if st.sidebar.button("🔄 Force Refresh Model"):
+        # Clear all caches and session state
+        load_trained_model.clear()
+        if 'model_mod_time' in st.session_state:
+            del st.session_state.model_mod_time
+        
+        # Clear all streamlit caches
+        st.cache_data.clear()
+        st.cache_resource.clear()
+        
+        st.sidebar.success("All caches cleared!")
+        st.rerun()
+    
+    # Debug info for troubleshooting
+    if st.sidebar.checkbox("🔍 Show Debug Info"):
+        st.sidebar.markdown("**Debug Information:**")
+        model_path = Path("models/best_model.joblib")
+        if model_path.exists():
+            mod_time = model_path.stat().st_mtime
+            st.sidebar.text(f"File mod time: {mod_time}")
+            session_time = st.session_state.get('model_mod_time', 'Not set')
+            st.sidebar.text(f"Session time: {session_time}")
+            st.sidebar.text(f"Match: {mod_time == session_time if session_time != 'Not set' else False}")
     
     # Load data
     df_raw, df_clean, feature_info = load_data()
@@ -183,9 +265,11 @@ def show_home_page(df: pd.DataFrame):
     st.markdown("---")
     st.subheader("🎯 Model Status")
     
-    model, model_name = load_trained_model()
+    model, model_name, timestamp = get_current_model()
     if model is not None:
         st.success(f"✅ Trained model available: {model_name}")
+        if timestamp:
+            st.info(f"📅 Model trained: {timestamp}")
         st.info("You can make predictions using the trained model!")
     else:
         st.warning("⚠️ No trained model found. Please train a model first.")
@@ -414,6 +498,21 @@ def show_model_training_page():
                 # Save best model
                 trainer.save_best_model(best_model_name, best_model)
                 
+                # Aggressive cache clearing to ensure fresh model load
+                load_trained_model.clear()
+                st.cache_data.clear()
+                st.cache_resource.clear()
+                
+                # Clear session state to force fresh check
+                if 'model_mod_time' in st.session_state:
+                    del st.session_state.model_mod_time
+                
+                st.success("✅ Best model saved successfully! You can now use it for predictions.")
+                st.success("🔄 Model cache refreshed - the app will now use the newly trained model.")
+                
+                # Show which model was actually saved
+                st.info(f"🎯 Saved model: **{best_model_name}**")
+                
                 # Visualization
                 fig = px.bar(
                     comparison_df, x='Model', y='Val RMSE',
@@ -431,13 +530,15 @@ def show_model_evaluation_page():
     st.header("📈 Model Evaluation")
     
     # Load model and data
-    model, model_name = load_trained_model()
+    model, model_name, timestamp = get_current_model()
     
     if model is None:
         st.warning("⚠️ No trained model found. Please train a model first.")
         return
     
     st.success(f"✅ Loaded model: {model_name}")
+    if timestamp:
+        st.info(f"📅 Model trained: {timestamp}")
     
     # Load test data
     try:
@@ -545,13 +646,15 @@ def show_prediction_page(feature_info: Dict):
     st.header("🎯 Make Predictions")
     
     # Load model
-    model, model_name = load_trained_model()
+    model, model_name, timestamp = get_current_model()
     
     if model is None:
         st.warning("⚠️ No trained model found. Please train a model first.")
         return
     
     st.success(f"✅ Using model: {model_name}")
+    if timestamp:
+        st.info(f"📅 Model trained: {timestamp}")
     
     # Input method selection
     input_method = st.radio(
