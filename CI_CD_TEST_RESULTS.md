@@ -112,3 +112,38 @@ This showcases enterprise-level CI/CD practices used by major tech companies! �
 - ✅ **Local Docker Build**: Builds and tests container locally
 - ⏸️ **Docker Registry Push**: Temporarily disabled
 - ✅ **Model Training**: MLflow tracking and artifact storage
+
+## Test Run 4: Docker Hub Integration Enabled
+**Date**: July 20, 2025
+**Status**: ✅ Docker Hub secrets configured and workflow updated
+
+### ✅ **Docker Hub Integration Completed:**
+- **Docker Hub Secrets**: `DOCKER_USERNAME` and `DOCKER_PASSWORD` added to GitHub repository
+- **Production Deployment**: Pushes to Docker Hub on `main` branch
+  - Tags: `latest` and `v{build_number}`
+- **Staging Deployment**: Pushes to Docker Hub on `develop` branch
+  - Tags: `staging` and `dev-{commit_sha}`
+- **Workflow Simplification**: Removed duplicate `ci.yml`, using clean `ci-cd.yml`
+
+### 🚀 **Complete CI/CD Pipeline Now Includes:**
+✅ **Testing Phase**:
+- Unit tests with pytest (Python 3.11 & 3.12)
+- Code linting with flake8
+- Format checking with black and isort
+- Security scanning with bandit
+
+✅ **Docker Build & Deploy**:
+- Build Docker images with proper tagging
+- Push to Docker Hub registry
+- Health check testing of containers
+- Automatic versioning with build numbers
+
+✅ **Branch Strategy**:
+- `main` branch → Production deployment (`:latest`, `:v{number}`)
+- `develop` branch → Staging deployment (`:staging`, `:dev-{sha}`)
+- Pull requests → Testing only (no deployment)
+
+### 📦 **Docker Images Available At:**
+- **Production**: `{username}/concrete-strength-predictor:latest`
+- **Staging**: `{username}/concrete-strength-predictor:staging`
+- **Versioned**: `{username}/concrete-strength-predictor:v{build_number}`
