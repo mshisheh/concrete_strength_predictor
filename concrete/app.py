@@ -186,36 +186,34 @@ def main():
     page = st.sidebar.selectbox(
         "Choose a page:",
         ["🏠 Home", "📊 Data Exploration", "🔬 Model Training", 
-         "📈 Model Evaluation", "🎯 Make Predictions", "📦 Model Registry", " About"]
+         "📈 Model Evaluation", "🎯 Make Predictions", "� About"]
     )
     
     # Model status in sidebar
     st.sidebar.markdown("---")
     st.sidebar.subheader("🎯 Current Model")
     
-    # Model source selection
-    use_registry = st.sidebar.checkbox("📦 Use MLflow Registry", value=False, help="Load model from MLflow registry instead of local files (enable after training models)")
-    
-    model, model_name, timestamp, source, stage = get_current_model(use_registry)
+    # Model source - always use MLflow registry by default
+    model, model_name, timestamp, source, stage = get_current_model(use_registry=True)
     if model is not None:
         if source == 'registry':
             st.sidebar.success(f"✅ {model_name} ({stage})")
             st.sidebar.caption(f"📦 From MLflow Registry")
         else:
             st.sidebar.success(f"✅ {model_name}")
-            if use_registry:
-                st.sidebar.caption(f"📁 From local file (registry empty)")
-            else:
-                st.sidebar.caption(f"📁 From local file")
+            st.sidebar.caption(f"📁 From local file (registry fallback)")
         
         if timestamp:
             # Show just the date part for brevity
-            date_part = timestamp.split('T')[0] if 'T' in timestamp else str(timestamp)[:10]
+            timestamp_str = str(timestamp)
+            if 'T' in timestamp_str:
+                date_part = timestamp_str.split('T')[0]
+            else:
+                date_part = timestamp_str[:10]
             st.sidebar.caption(f"📅 {date_part}")
     else:
         st.sidebar.warning("⚠️ No model")
-        if use_registry:
-            st.sidebar.caption("💡 Try training a model to populate the registry")
+        st.sidebar.caption("💡 Try training a model to populate the registry")
     
     # MLflow registry controls
     st.sidebar.markdown("**🏷️ Registry Actions:**")
@@ -257,6 +255,57 @@ def main():
             else:
                 st.sidebar.error(f"❌ Promotion failed: {e}")
     
+    # Register existing models button (if registry is empty but local models exist)
+    try:
+        trainer = ConcreteTrainer()
+        versions = trainer.get_model_versions()
+        model_path = Path("models/best_model.joblib")
+        
+        if not versions and model_path.exists():
+            if st.sidebar.button("📝 Register Local Model"):
+                try:
+                    # Find the most recent MLflow run with a model
+                    import mlflow
+                    runs = mlflow.search_runs(order_by=["start_time DESC"], max_results=10)
+                    
+                    if not runs.empty:
+                        # Get the most recent run that has a model artifact
+                        for _, run in runs.iterrows():
+                            run_id = run['run_id']
+                            try:
+                                # Check if this run has a model artifact
+                                artifacts = mlflow.tracking.MlflowClient().list_artifacts(run_id)
+                                if any(artifact.path == 'model' for artifact in artifacts):
+                                    # Register this model
+                                    model_uri = f"runs:/{run_id}/model"
+                                    result = mlflow.register_model(
+                                        model_uri=model_uri,
+                                        name=trainer.model_name
+                                    )
+                                    
+                                    # Transition to Staging
+                                    trainer.client.transition_model_version_stage(
+                                        name=trainer.model_name,
+                                        version=result.version,
+                                        stage="Staging"
+                                    )
+                                    
+                                    st.sidebar.success(f"✅ Registered model v{result.version} to Staging!")
+                                    load_model_from_registry.clear()
+                                    st.rerun()
+                                    break
+                            except Exception:
+                                continue
+                        else:
+                            st.sidebar.error("❌ No valid model runs found to register")
+                    else:
+                        st.sidebar.error("❌ No MLflow runs found")
+                        
+                except Exception as e:
+                    st.sidebar.error(f"❌ Registration failed: {e}")
+    except Exception:
+        pass  # Ignore errors in this check
+    
     
     # Add model cache refresh button
     st.sidebar.markdown("---")
@@ -277,7 +326,7 @@ def main():
     # Debug info for troubleshooting
     if st.sidebar.checkbox("🔍 Show Debug Info"):
         st.sidebar.markdown("**Debug Information:**")
-        st.sidebar.text(f"Use registry: {use_registry}")
+        st.sidebar.text(f"Always using MLflow registry")
         st.sidebar.text(f"Source: {source if model else 'None'}")
         st.sidebar.text(f"Stage: {stage if model else 'None'}")
         
@@ -307,9 +356,7 @@ def main():
         show_model_evaluation_page()
     elif page == "🎯 Make Predictions":
         show_prediction_page(feature_info)
-    elif page == "📦 Model Registry":
-        show_model_registry_page()
-    elif page == " About":
+    elif page == "� About":
         show_about_page()
 
 
@@ -355,7 +402,7 @@ def show_home_page(df: pd.DataFrame):
     st.markdown("---")
     st.subheader("🎯 Model Status")
     
-    model, model_name, timestamp, source, stage = get_current_model(use_registry=False)  # Use local files for home page
+    model, model_name, timestamp, source, stage = get_current_model(use_registry=True)  # Use MLflow registry by default
     if model is not None:
         st.success(f"✅ Trained model available: {model_name}")
         if source == 'registry':
@@ -561,7 +608,8 @@ def show_model_training_page():
                 models_to_train = [available_models[model] for model in selected_models]
                 results = trainer.train_all_models(
                     X_train, y_train, X_val, y_val,
-                    models_to_train=models_to_train
+                    models_to_train=models_to_train,
+                    register_best=True  # Explicitly register best model to MLflow
                 )
                 
                 # Display results
@@ -627,7 +675,7 @@ def show_model_evaluation_page():
     st.header("📈 Model Evaluation")
     
     # Load model and data
-    model, model_name, timestamp, source, stage = get_current_model(use_registry=False)  # Use local files for evaluation
+    model, model_name, timestamp, source, stage = get_current_model(use_registry=True)  # Use MLflow registry by default
     
     if model is None:
         st.warning("⚠️ No trained model found. Please train a model first.")
@@ -747,7 +795,7 @@ def show_prediction_page(feature_info: Dict):
     st.header("🎯 Make Predictions")
     
     # Load model
-    model, model_name, timestamp, source, stage = get_current_model(use_registry=False)  # Use local files for predictions
+    model, model_name, timestamp, source, stage = get_current_model(use_registry=True)  # Use MLflow registry by default
     
     if model is None:
         st.warning("⚠️ No trained model found. Please train a model first.")
