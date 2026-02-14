@@ -345,6 +345,177 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
+## 🎯 New Agenda
 
-## New Agenda
+The following features are planned for future development to enhance the production capabilities and MLOps maturity of the system:
+
+### 1. REST API with FastAPI
+
+**Priority**: Highest  
+**Story Points**: 21
+
+Build a production-ready REST API to enable programmatic access and system integrations.
+
+**Planned Features**:
+- **POST** `/api/v1/predict` - Single prediction endpoint
+- **POST** `/api/v1/predict/batch` - Batch predictions with async processing
+- **GET** `/api/v1/models` - List all registered models from MLflow Registry
+- **GET** `/api/v1/models/{model_name}/versions` - Get model version details
+- **GET** `/health` - Health check endpoint for orchestration
+- OpenAPI/Swagger documentation at `/docs`
+- Pydantic validation for all inputs
+- Error handling with proper HTTP status codes
+- Integration with MLflow Model Registry for model loading
+
+**Expected Outcomes**:
+- Enable integration with external systems and microservices
+- Support programmatic predictions from other applications
+- Facilitate CI/CD integration testing
+- Docker deployment with both API and Streamlit services
+
+---
+
+### 2. Production Monitoring Dashboard
+
+**Priority**: Highest  
+**Story Points**: 18
+
+Implement comprehensive monitoring and observability for production model performance.
+
+**Planned Components**:
+- **Prometheus** metrics collection:
+  - Request rate, latency, error rate (RED metrics)
+  - Prediction distribution tracking
+  - Model RMSE over time
+  - Feature distribution statistics
+- **Grafana** dashboards:
+  - API Performance (RPS, latency percentiles, error rates)
+  - Model Performance (RMSE drift, prediction accuracy)
+  - System Health (CPU, memory, disk usage)
+- **Alerting System** (Alertmanager):
+  - High error rate alerts (>5%)
+  - High latency alerts (>2s p95)
+  - Model RMSE degradation alerts (>10% increase)
+  - Email/Slack notifications
+- **Structured Logging**:
+  - JSON format logs with trace IDs
+  - Centralized log aggregation
+  - Request/response logging with sampling
+
+**Expected Outcomes**:
+- Real-time visibility into model performance
+- Proactive detection of issues before users report them
+- Performance degradation alerts
+- Improved debugging capabilities
+
+---
+
+### 3. Data Drift Detection
+
+**Priority**: High  
+**Story Points**: 15
+
+Automated detection of data drift to maintain model accuracy over time.
+
+**Planned Features**:
+- **Statistical Drift Tests**:
+  - Kolmogorov-Smirnov (KS) test for feature distribution shifts
+  - Population Stability Index (PSI) for stability monitoring
+  - Prediction drift detection
+  - Concept drift identification
+- **Automated Monitoring**:
+  - Scheduled daily drift checks via cron/Airflow
+  - Compare production data vs. training reference data
+  - Store drift metrics in database for trend analysis
+- **Drift Visualization Dashboard**:
+  - "Data Health" page in Streamlit app
+  - Feature distribution comparisons
+  - Drift score trends over time
+  - Recommendations for retraining triggers
+- **Integration**:
+  - Alert system integration for significant drift
+  - Automated retraining pipeline triggers
+  - DVC activation for data versioning
+
+**Expected Outcomes**:
+- Prevent model degradation through early drift detection
+- Automated retraining triggers when drift exceeds thresholds
+- Maintain prediction quality over time
+- Data quality monitoring
+
+---
+
+### 4. Automated Model Validation Pipeline
+
+**Priority**: High  
+**Story Points**: 13
+
+Implement quality gates to prevent poor models from reaching production.
+
+**Planned Features**:
+- **Model Validator Module** (`concrete/model_validator.py`):
+  - Performance thresholds (RMSE < 7.0 MPa, R² > 0.80)
+  - Prediction bias checks
+  - Inference time validation (< 100ms)
+  - Overfitting detection (train vs. validation comparison)
+  - Feature importance stability checks
+- **MLflow Registry Integration**:
+  - Auto-validate before model registration
+  - Block registration if validation fails
+  - Log validation results and reports to MLflow
+  - Generate validation report PDFs
+- **CI/CD Integration**:
+  - Add model validation to GitHub Actions pipeline
+  - Run validation on model commits
+  - Block PRs if validation criteria not met
+  - Validation badges in README
+
+**Expected Outcomes**:
+- Prevent deployment of under-performing models
+- Enforce quality standards automatically
+- Reduce production incidents
+- Maintain consistent model quality
+
+---
+
+### 5. Batch Prediction Service
+
+**Priority**: Medium  
+**Story Points**: 8
+
+Enable large-scale batch predictions with async processing.
+
+**Planned Features**:
+- **Async Job Queue**:
+  - Celery + Redis for task management
+  - Background job processing
+  - Job status tracking and progress updates
+- **Storage Integration**:
+  - S3/Cloud Storage support for large input files
+  - Efficient CSV/Parquet file processing
+  - Result file storage and download links
+- **Notification System**:
+  - Email notifications on job completion
+  - Webhook support for job status updates
+  - Failed job retry logic
+- **API Endpoints**:
+  - **POST** `/api/v1/batch/submit` - Submit batch job
+  - **GET** `/api/v1/batch/{job_id}/status` - Check job status
+  - **GET** `/api/v1/batch/{job_id}/results` - Download results
+
+**Expected Outcomes**:
+- Process thousands of predictions efficiently
+- Non-blocking async processing
+- Support for enterprise-scale workloads
+- Improved user experience for large datasets
+
+---
+
+### 📋 Implementation Roadmap
+
+**Phase 1 (Q2 2026)**: REST API + Monitoring Dashboard  
+**Phase 2 (Q3 2026)**: Drift Detection + Model Validation  
+**Phase 3 (Q4 2026)**: Batch Prediction Service  
+
+**Note**: DVC setup is already prepared. Run `python setup_dvc.py` to activate data versioning
 
